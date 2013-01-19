@@ -332,16 +332,24 @@ func Ticker(client chan *Client) {
 	}
 }
 
-func main() {
-	clientChannel := make(chan *Client)
+func makeEnemy(name string, health uint) *Enemy {
+	return &Enemy{name, health, health, nil}
+}
 
+func createWorld() {
 	room1.North = room2
 	room2.South = room1
 
 	room2.EnemyList = append(room2.EnemyList,
-		&Enemy{"slime", 50, 50, nil},
-		&Enemy{"slime", 50, 50, nil},
-		&Enemy{"horse", 50, 50, nil})
+		makeEnemy("slime", 50),
+		makeEnemy("slime", 50),
+		makeEnemy("horse", 50))
+}
+
+func main() {
+	clientChannel := make(chan *Client)
+
+	createWorld()
 
 	ln, err := net.Listen("tcp", ":9998")
 	if err != nil {
