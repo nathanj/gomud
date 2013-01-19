@@ -14,6 +14,7 @@ type Client struct {
 	Name      string
 	Conn      net.Conn
 	Incoming  chan string
+	Quit      chan bool
 	Health    int
 	MaxHealth int
 	Mana      int
@@ -51,6 +52,8 @@ var room2 = &Room{Name: "Second Room", Description: "This is the second room."}
 
 func (c *Client) Close() {
 	c.Conn.Close()
+	clientList = removeClient(clientList, c)
+	c.Quit <- true
 }
 
 func (c *Client) handleCmdSay(args string) {
@@ -183,13 +186,13 @@ func ClientReader(client *Client) {
 		}
 		cmd := string(buffer[0 : nread-1])
 		if cmd == "quit" {
-			client.Close()
 			break
 		}
 		log.Printf("ClientReader received %s> %s", client.Name, cmd)
 		client.handleCmd(cmd)
 	}
 	log.Printf("ClientReader stopped for %s\n", client.Name)
+	client.Close()
 }
 
 func ClientSender(client *Client) {
@@ -207,6 +210,9 @@ func ClientSender(client *Client) {
 			}
 			log.Print("Send size: ", count)
 			client.Conn.Write([]byte(buf)[0:count])
+		case <-client.Quit:
+			log.Printf("ClientSender: quitting\n")
+			return
 		}
 	}
 }
@@ -266,8 +272,9 @@ func handleConnection(conn net.Conn, clientChannel chan *Client) {
 	name := string(buffer[0 : nread-1])
 	incoming := make(chan string)
 	fmt.Printf("name = %s\n", name)
+	quit := make(chan bool)
 
-	client := &Client{name, conn, incoming, 100, 100, 30, 30, room1, nil}
+	client := &Client{name, conn, incoming, quit, 100, 100, 30, 30, room1, nil}
 
 	go ClientReader(client)
 	go ClientSender(client)
@@ -297,6 +304,16 @@ func doTick() {
 		}
 		c.doFight()
 	}
+}
+
+func removeClient(clientList []*Client, client *Client) []*Client {
+	var p []*Client
+	for _, c := range clientList {
+		if c != client {
+			p = append(p, c)
+		}
+	}
+	return p
 }
 
 func repopRoom(room *Room) {
