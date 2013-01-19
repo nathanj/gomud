@@ -13,18 +13,18 @@ type Client struct {
 	Name      string
 	Conn      net.Conn
 	Incoming  chan string
-	Health    uint
-	MaxHealth uint
-	Mana      uint
-	MaxMana   uint
+	Health    int
+	MaxHealth int
+	Mana      int
+	MaxMana   int
 	Room      *Room
 	Fighting  *Enemy
 }
 
 type Enemy struct {
 	Name      string
-	Health    uint
-	MaxHealth uint
+	Health    int
+	MaxHealth int
 	Fighting  *Client
 }
 
@@ -332,7 +332,7 @@ func Ticker(client chan *Client) {
 	}
 }
 
-func makeEnemy(name string, health uint) *Enemy {
+func makeEnemy(name string, health int) *Enemy {
 	return &Enemy{name, health, health, nil}
 }
 
