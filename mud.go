@@ -58,6 +58,11 @@ func (c *Client) Close() {
 
 func (c *Client) handleCmdSay(args string) {
 	c.Incoming <- "You say \"" + args + "\"\n"
+	for _, client := range clientList {
+		if client != c && client.Room == c.Room {
+			client.Incoming <- c.Name + " says \"" + args + "\"\n"
+		}
+	}
 }
 
 func (c *Client) findEnemy(name string) *Enemy {
