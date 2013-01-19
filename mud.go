@@ -237,6 +237,16 @@ func (r *Room) makeEnemyString() string {
 	return s
 }
 
+func makeOtherPlayerString(client *Client) string {
+	var s string
+	for _, c := range clientList {
+		if c != client && c.Room == client.Room {
+			s += fmt.Sprintf("@y@%s is here.@n@\n", c.Name)
+		}
+	}
+	return s
+}
+
 func (r *Room) makeExitString() string {
 	s := "You can go: "
 	if r.East != nil {
@@ -255,7 +265,11 @@ func (r *Room) makeExitString() string {
 }
 
 func (c *Client) printRoomDescription() {
-	c.Incoming <- c.Room.Name + "\n\n" + c.Room.Description + "\n" + c.Room.makeEnemyString() + "\n" + c.Room.makeExitString() + "\n"
+	c.Incoming <- c.Room.Name + "\n\n" +
+		c.Room.Description + "\n" +
+		c.Room.makeEnemyString() + "\n" +
+		makeOtherPlayerString(c) + "\n" +
+		c.Room.makeExitString() + "\n"
 }
 
 func (c *Client) makePrompt() string {
