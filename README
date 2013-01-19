@@ -1,0 +1,23 @@
+gomud
+=====
+
+This is my attempt to learn the Go language. It is a super basic MUD.
+Maybe someday it will be fun.
+
+Building
+========
+
+    $ go fetch github.com/nathanj/gomud
+    $ go build github.com/nathanj/gomud
+
+Playing
+=======
+
+If it hasn't crashed, you can connect to the version on my server with:
+
+    $ nc bitcrafter.net 9998
+
+Or, if you want to play on your own local copy:
+
+    $ ./gomud
+    $ nc localhost 9998
