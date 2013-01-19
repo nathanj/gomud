@@ -51,6 +51,7 @@ var room1 = &Room{Name: "Starting Room", Description: "This is the luxurious sta
 var room2 = &Room{Name: "Second Room", Description: "This is the second room."}
 
 func (c *Client) Close() {
+	log.Printf("Client.Close: Closing client=%p", c)
 	c.Conn.Close()
 	clientList = removeClient(clientList, c)
 	c.Quit <- true
@@ -186,17 +187,17 @@ func ClientReader(client *Client) {
 	for {
 		nread, err := client.Conn.Read(buffer)
 		if err != nil {
-			log.Print(err)
+			log.Printf("ClientReader: Read: %v", err)
 			break
 		}
 		cmd := string(buffer[0 : nread-1])
 		if cmd == "quit" {
 			break
 		}
-		log.Printf("ClientReader received %s> %s", client.Name, cmd)
+		log.Printf("ClientReader: %s > %s", client.Name, cmd)
 		client.handleCmd(cmd)
 	}
-	log.Printf("ClientReader stopped for %s\n", client.Name)
+	log.Printf("ClientReader: stopped for %s", client.Name)
 	client.Close()
 }
 
@@ -205,7 +206,6 @@ func ClientSender(client *Client) {
 		select {
 		case buffer := <-client.Incoming:
 			buf := fmt.Sprintf("%s\n%s", color.Colorize(buffer), client.makePrompt())
-			log.Print("ClientSender sending ", string(buffer), " to ", client.Name)
 			count := 0
 			for i := 0; i < len(buf); i++ {
 				if buf[i] == 0x00 {
@@ -213,8 +213,13 @@ func ClientSender(client *Client) {
 				}
 				count++
 			}
-			log.Print("Send size: ", count)
-			client.Conn.Write([]byte(buf)[0:count])
+			log.Printf("ClientSender: sending size=%d count=%d to %s %v\n", len(buf), count, client.Name, client.Conn.RemoteAddr())
+			num, err := client.Conn.Write([]byte(buf)[0:count])
+			if err != nil {
+				log.Printf("ClientSender: Write: %v", err)
+			} else if num != count {
+				log.Printf("ClientSender: num=%d count=%d\n", num, count)
+			}
 		case <-client.Quit:
 			log.Printf("ClientSender: quitting\n")
 			return
@@ -265,19 +270,22 @@ func (c *Client) makePrompt() string {
 }
 
 func handleConnection(conn net.Conn, clientChannel chan *Client) {
+	log.Printf("handleConnection: Got connection from %v",
+		conn.RemoteAddr())
 	buffer := make([]byte, 256)
-	conn.Write([]byte("What is your name? "))
+	s := fmt.Sprintf("Welcome! There are %d players connected. What is your name? ", len(clientList))
+	conn.Write([]byte(s))
 	nread, err := conn.Read(buffer)
 	if err != nil {
-		log.Print("handleConnection Read() failed: ", err)
+		log.Printf("handleConnection: Read: %v", err)
 		conn.Close()
 		return
 	}
 
 	name := string(buffer[0 : nread-1])
 	incoming := make(chan string)
-	fmt.Printf("name = %s\n", name)
 	quit := make(chan bool)
+	log.Printf("handleConnection: got name = %s", name)
 
 	client := &Client{name, conn, incoming, quit, 100, 100, 30, 30, room1, nil}
 
@@ -302,7 +310,6 @@ func (c *Client) doFight() {
 }
 
 func doTick() {
-	log.Print("Doing tick")
 	for _, c := range clientList {
 		if c.Fighting == nil {
 			continue
@@ -324,7 +331,7 @@ func removeClient(clientList []*Client, client *Client) []*Client {
 func repopRoom(room *Room) {
 	for _, en := range room.EnemyList {
 		if en.Health <= 0 {
-			log.Printf("repoping %v\n", en)
+			log.Printf("repopRoom: repoping %v", en)
 			en.Health = en.MaxHealth
 		}
 	}
@@ -336,7 +343,7 @@ func repopRoom(room *Room) {
 }
 
 func doRepop() {
-	log.Print("Doing repop")
+	log.Printf("doRepop: repop")
 	repopRoom(room1)
 	repopRoom(room2)
 }
@@ -380,7 +387,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Listening...")
+	log.Printf("Listening...")
 
 	go Ticker(clientChannel)
 
