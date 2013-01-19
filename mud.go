@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"mud/color"
 	"net"
 	"strings"
 	"sync"
@@ -195,7 +196,7 @@ func ClientSender(client *Client) {
 	for {
 		select {
 		case buffer := <-client.Incoming:
-			buf := fmt.Sprintf("%s\n%s", buffer, client.makePrompt())
+			buf := fmt.Sprintf("%s\n%s", color.Colorize(buffer), client.makePrompt())
 			log.Print("ClientSender sending ", string(buffer), " to ", client.Name)
 			count := 0
 			for i := 0; i < len(buf); i++ {
@@ -214,7 +215,7 @@ func (r *Room) makeEnemyString() string {
 	var s string
 	for _, en := range r.EnemyList {
 		if en.Health > 0 {
-			s += fmt.Sprintf("%s is here.\n", en.Name)
+			s += fmt.Sprintf("@g@%s is here.@n@\n", en.Name)
 		}
 	}
 	return s
@@ -247,8 +248,9 @@ func (c *Client) makePrompt() string {
 		en := c.Fighting
 		s = fmt.Sprintf(" Enemy %2.0f%%", 100*float32(en.Health)/float32(en.MaxHealth))
 	}
-	return fmt.Sprintf("Health: %d/%d Mana: %d/%d%s> ",
-		c.Health, c.MaxHealth, c.Mana, c.MaxMana, s)
+	return fmt.Sprintf("%sHealth: %s%d/%d %sMana: %s%d/%d%s%s> ",
+		color.NORMAL, color.B_GREEN, c.Health, c.MaxHealth,
+		color.NORMAL, color.B_BLUE, c.Mana, c.MaxMana, color.NORMAL, s)
 }
 
 func handleConnection(conn net.Conn, clientChannel chan *Client) {
@@ -275,15 +277,15 @@ func handleConnection(conn net.Conn, clientChannel chan *Client) {
 
 func (c *Client) doFight() {
 	en := c.Fighting
-	c.Incoming <- "You hit " + en.Name + " for 10 damage!\n"
+	c.Incoming <- "@g@You hit " + en.Name + " for 10 damage!@n@\n"
 	en.Health -= 10
 	if en.Health <= 0 {
-		c.Incoming <- "You kill " + en.Name + "!\n"
+		c.Incoming <- "@G@You kill " + en.Name + "!@n@\n"
 		c.Fighting = nil
 		en.Fighting = nil
 		return
 	}
-	c.Incoming <- en.Name + " hits you for 5 damage!\n"
+	c.Incoming <- "@r@" + en.Name + " hits you for 5 damage!@n@\n"
 	c.Health -= 5
 }
 
