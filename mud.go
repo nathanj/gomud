@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/nathanj/gomud/color"
 	"log"
-	"mud/color"
 	"net"
 	"strings"
 	"sync"
