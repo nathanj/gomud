@@ -10,6 +10,28 @@ import (
 	"time"
 )
 
+type ItemType int
+
+const (
+	Potion ItemType = iota
+	Head
+	Torso
+	Weapon
+)
+
+type Item struct {
+	Name     string
+	Keywords []string
+	Type     ItemType
+}
+
+type Inventory struct {
+	Items  []*Item
+	Head   *Item
+	Torso  *Item
+	Weapon *Item
+}
+
 type Client struct {
 	Name      string
 	Conn      net.Conn
@@ -21,6 +43,7 @@ type Client struct {
 	MaxMana   int
 	Room      *Room
 	Fighting  *Enemy
+	Inventory *Inventory
 }
 
 type Enemy struct {
@@ -154,6 +177,68 @@ func (c *Client) handleCmdLook() {
 	c.printRoomDescription()
 }
 
+func itemString(item *Item) string {
+	if item == nil {
+		return "None"
+	}
+	return item.Name
+}
+
+func (c *Client) handleCmdInventory() {
+	s := "Inventory:\n"
+	s += "@l@Worn on head: " + itemString(c.Inventory.Head) + "\n"
+	s += "Worn on torso: " + itemString(c.Inventory.Torso) + "\n"
+	s += "Wielded: " + itemString(c.Inventory.Weapon) + "@n@\n"
+	for _, item := range c.Inventory.Items {
+		s += item.Name + "\n"
+	}
+	c.Incoming <- s
+}
+
+func (c *Client) findInventoryItem(name string) *Item {
+	for _, item := range c.Inventory.Items {
+		for _, kw := range item.Keywords {
+			if kw == name {
+				return item
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Client) handleCmdWear(name string) {
+	item := c.findInventoryItem(name)
+	if item == nil {
+		c.Incoming <- "You do not have that item!\n"
+		return
+	}
+	switch item.Type {
+	case Head:
+		c.Incoming <- "You equip " + item.Name + " on your head.\n"
+		c.Inventory.Items = removeItem(c.Inventory.Items, item)
+		if c.Inventory.Head != nil {
+			c.Inventory.Items = append(c.Inventory.Items, c.Inventory.Head)
+		}
+		c.Inventory.Head = item
+	case Torso:
+		c.Incoming <- "You equip " + item.Name + " on your torso.\n"
+		c.Inventory.Items = removeItem(c.Inventory.Items, item)
+		if c.Inventory.Torso != nil {
+			c.Inventory.Items = append(c.Inventory.Items, c.Inventory.Torso)
+		}
+		c.Inventory.Torso = item
+	case Weapon:
+		c.Incoming <- "You wield " + item.Name + " in your hand.\n"
+		c.Inventory.Items = removeItem(c.Inventory.Items, item)
+		if c.Inventory.Weapon != nil {
+			c.Inventory.Items = append(c.Inventory.Items, c.Inventory.Weapon)
+		}
+		c.Inventory.Weapon = item
+	default:
+		c.Incoming <- "You don't know how to wear" + item.Name + "!\n"
+	}
+}
+
 func (c *Client) handleCmd(cmd string) {
 	switch {
 	case strings.HasPrefix(cmd, "say "):
@@ -176,6 +261,14 @@ func (c *Client) handleCmd(cmd string) {
 		c.handleCmdSouth()
 	case cmd == "look" || cmd == "l":
 		c.handleCmdLook()
+	case cmd == "inventory" || cmd == "inv" || cmd == "i":
+		c.handleCmdInventory()
+	case strings.HasPrefix(cmd, "wear "):
+		c.handleCmdWear(cmd[5:])
+	case strings.HasPrefix(cmd, "equip "):
+		c.handleCmdWear(cmd[6:])
+	case strings.HasPrefix(cmd, "eq "):
+		c.handleCmdWear(cmd[3:])
 	default:
 		c.Incoming <- "Unknown command " + cmd + "\n"
 	}
@@ -301,7 +394,15 @@ func handleConnection(conn net.Conn, clientChannel chan *Client) {
 	quit := make(chan bool)
 	log.Printf("handleConnection: got name = %s", name)
 
-	client := &Client{name, conn, incoming, quit, 100, 100, 30, 30, room1, nil}
+	client := &Client{name, conn, incoming, quit,
+		100, 100, 30, 30, room1, nil, &Inventory{nil, nil, nil, nil}}
+
+	client.Inventory.Items = append(client.Inventory.Items,
+		&Item{"Health potion", []string{"health", "potion"}, Potion})
+	client.Inventory.Items = append(client.Inventory.Items,
+		&Item{"Wooden Training Sword", []string{"wooden", "training", "sword"}, Weapon})
+	client.Inventory.Items = append(client.Inventory.Items,
+		&Item{"Leather Armor", []string{"leather", "armor"}, Torso})
 
 	go ClientReader(client)
 	go ClientSender(client)
@@ -330,6 +431,16 @@ func doTick() {
 		}
 		c.doFight()
 	}
+}
+
+func removeItem(itemList []*Item, item *Item) []*Item {
+	var p []*Item
+	for _, c := range itemList {
+		if c != item {
+			p = append(p, c)
+		}
+	}
+	return p
 }
 
 func removeClient(clientList []*Client, client *Client) []*Client {
