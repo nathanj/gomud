@@ -32,6 +32,20 @@ type Inventory struct {
 	Weapon *Item
 }
 
+type Spell struct {
+	Name string
+	Cast func(*Client, string)
+	Mana int
+}
+
+func castHeal(caster *Client, target string) {
+	caster.Health += 50
+	if caster.Health > caster.MaxHealth {
+		caster.Health = caster.MaxHealth
+	}
+	caster.Incoming <- "@G@You heal for 50 health!@n@\n"
+}
+
 type Client struct {
 	Name      string
 	Conn      net.Conn
@@ -44,6 +58,7 @@ type Client struct {
 	Room      *Room
 	Fighting  *Enemy
 	Inventory *Inventory
+	Spells    []*Spell
 }
 
 type Enemy struct {
@@ -184,6 +199,14 @@ func itemString(item *Item) string {
 	return item.Name
 }
 
+func (c *Client) handleCmdSpells() {
+	s := "Spells:\n"
+	for _, spell := range c.Spells {
+		s += fmt.Sprintf("%s (%d mana)\n", spell.Name, spell.Mana)
+	}
+	c.Incoming <- s
+}
+
 func (c *Client) handleCmdInventory() {
 	s := "Inventory:\n"
 	s += "@l@Worn on head: " + itemString(c.Inventory.Head) + "\n"
@@ -239,6 +262,29 @@ func (c *Client) handleCmdWear(name string) {
 	}
 }
 
+func (c *Client) findSpell(name string) *Spell {
+	for _, spell := range c.Spells {
+		if spell.Name == name {
+			return spell
+		}
+	}
+	return nil
+}
+
+func (c *Client) handleCmdCast(name string) {
+	spell := c.findSpell(name)
+	if spell == nil {
+		c.Incoming <- "You do not know that spell!\n"
+		return
+	}
+	if spell.Mana > c.Mana {
+		c.Incoming <- "You do not have enough mana!\n"
+		return
+	}
+	spell.Cast(c, "")
+	c.Mana -= spell.Mana
+}
+
 func (c *Client) handleCmd(cmd string) {
 	switch {
 	case strings.HasPrefix(cmd, "say "):
@@ -269,6 +315,12 @@ func (c *Client) handleCmd(cmd string) {
 		c.handleCmdWear(cmd[6:])
 	case strings.HasPrefix(cmd, "eq "):
 		c.handleCmdWear(cmd[3:])
+	case cmd == "spells":
+		c.handleCmdSpells()
+	case strings.HasPrefix(cmd, "cast "):
+		c.handleCmdCast(cmd[5:])
+	case strings.HasPrefix(cmd, "c "):
+		c.handleCmdCast(cmd[2:])
 	default:
 		c.Incoming <- "Unknown command " + cmd + "\n"
 	}
@@ -395,7 +447,9 @@ func handleConnection(conn net.Conn, clientChannel chan *Client) {
 	log.Printf("handleConnection: got name = %s", name)
 
 	client := &Client{name, conn, incoming, quit,
-		100, 100, 30, 30, room1, nil, &Inventory{nil, nil, nil, nil}}
+		100, 100, 30, 30, room1, nil,
+		&Inventory{nil, nil, nil, nil},
+		nil}
 
 	client.Inventory.Items = append(client.Inventory.Items,
 		&Item{"Health potion", []string{"health", "potion"}, Potion})
@@ -403,6 +457,8 @@ func handleConnection(conn net.Conn, clientChannel chan *Client) {
 		&Item{"Wooden Training Sword", []string{"wooden", "training", "sword"}, Weapon})
 	client.Inventory.Items = append(client.Inventory.Items,
 		&Item{"Leather Armor", []string{"leather", "armor"}, Torso})
+	client.Spells = append(client.Spells,
+		&Spell{"heal", castHeal, 5})
 
 	go ClientReader(client)
 	go ClientSender(client)
